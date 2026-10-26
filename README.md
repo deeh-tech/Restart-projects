@@ -1,42 +1,65 @@
-# AWS EC2 Lifecycle Management & Web Server Deployment
+# AWS Lab: How I Managed Amazon EBS Volumes and Snapshots
 
-## 📋 Overview
-This project provides a comprehensive hands-on implementation of launching, resizing, managing, and monitoring an Amazon Elastic Compute Cloud (Amazon EC2) instance. 
-
-Amazon EC2 is a web service designed to provide resizable compute capacity in the cloud, making web-scale computing accessible for developers. By providing complete control over computing resources within Amazon's proven environment, it reduces server provisioning times to minutes. This enables rapid scaling—both up and down—as infrastructure requirements shift. 
-
-Furthermore, Amazon EC2 optimizes infrastructure economics by operating on a pay-as-you-go model for utilized capacity, while delivering the core tools necessary to build failure-resilient architectures isolated from common failure vectors.
+This repository documents my hands-on experience provisioning, attaching, mounting, backing up, and restoring **Amazon Elastic Block Store (Amazon EBS)** volumes on an **Amazon EC2** Linux instance. 
 
 ---
 
-## 🛠️ Core Objectives & Implementation Details
-
-### 1. Launch Web Server with Termination Protection Enabled
-* **Resource Provisioning:** Deployed a Linux-based EC2 virtual machine designated as **`MyWebServer`** via the AWS Management Console.
-* **Data Safeguarding:** Configured explicit termination protection attributes to mitigate the risk of accidental resource deletion.
-* **Bootstrap Automation:** Utilized user-data initialization scripts to automate the installation and launching of the web server daemon.
-
-### 2. Security Group Modification & Traffic Routing
-* **Firewall Configuration:** Modified the instance's associated stateful AWS Security Group.
-* **Inbound Rules:** Added a dedicated rule allowing inbound **HTTP traffic (Port 80)** from any source IP (`0.0.0.0/0`).
-* **Deployment Verification:** Successfully validated the deployment by navigating to the instance's Public IPv4 address and viewing the active web page.
-
-### 3. Instance Monitoring & Telemetry
-* **Health Metrics:** Observed and verified that both System Status and Instance Status checks successfully cleared.
-* **Performance Logs:** Utilized native CloudWatch metrics to monitor real-time infrastructure performance, including CPU utilization, network throughput, and disk I/O operations.
-
-### 4. Infrastructure Scaling & Volume Resizing
-* **Compute Scaling:** Successfully stopped the instance to modify the instance type to meet higher resource demands.
-* **Storage Optimization:** Expanded the root Elastic Block Store (EBS) volume capacity from **8 GB to 10 GB**, subsequently extending the OS-level file system partition to recognize the newly allocated storage blocks.
-
-### 5. Safeguard Verification & Resource Decommissioning
-* **Protection Testing:** Executed an intentional termination command to confirm that the active termination protection block safely rejected the deletion request.
-* **Lifecycle Cleanup:** Updated the instance settings to disable termination protection, followed by a final instance **Termination** to efficiently deprecate resources and eliminate ongoing AWS billing cycles.
+## My Lab Objectives
+* **Create an EBS volume** (`1 GiB`, `gp2`).
+* **Attach and mount** it to an EC2 instance as an `ext3` file system.
+* **Configure persistent mounting** via `/etc/fstab`.
+* **Take an EBS snapshot** to back up data to Amazon S3.
+* **Restore a new volume** from the snapshot to verify data recovery.
 
 ---
 
-## 📈 Technical Competencies Demonstrated
-* **Compute Layer:** Amazon EC2 Instance Lifecycle Management
-* **Storage Layer:** Amazon EBS Volume Optimization & Expansion
-* **Network Security:** Stateful Firewall (Security Group) Traffic Filtering
-* **Monitoring:** CloudWatch Infrastructure Metrics & Health Checks
+## Step-by-Step Walkthrough
+
+### Task 1 & 2: Creating and Attaching the Volume
+1. I created a `1 GiB` `gp2` volume named `My Volume` in the same Availability Zone as my EC2 instance.
+2. I attached the volume to my `Lab` instance using the device identifier `/dev/sdb`.
+
+### Task 3 & 4: Formatting and Mounting the File System
+I connected to the instance via **EC2 Instance Connect** and ran the following commands to format, mount, and establish persistence:
+
+```bash
+# Format the block device
+sudo mkfs -t ext3 /dev/sdb
+
+# Create a mount point and mount the device
+sudo mkdir /mnt/data-store
+sudo mount /dev/sdb /mnt/data-store
+
+# Ensure the mount persists through reboots
+echo "/dev/sdb /mnt/data-store ext3 defaults,noatime 1 2" | sudo tee -a /etc/fstab
+```
+
+I tested data creation by writing text to a file:
+```bash
+sudo sh -c "echo some text has been written > /mnt/data-store/file.txt"
+```
+
+### Task 5: Snapshot and Data Loss Simulation
+1. I created a backup snapshot named `My Snapshot` from `My Volume`.
+2. I simulated data loss by deleting the text file:
+   ```bash
+   sudo rm /mnt/data-store/file.txt
+   ```
+
+### Task 6: Restoring Data From the Snapshot
+To recover the file, I restored the snapshot onto a new volume and verified my data:
+
+1. I created a new volume named `Restored Volume` from `My Snapshot`.
+2. I attached it to my instance as `/dev/sdc`.
+3. I mounted it to a new directory to confirm the data was safe:
+   ```bash
+   sudo mkdir /mnt/data-store2
+   sudo mount /dev/sdc /mnt/data-store2
+   cat /mnt/data-store2/file.txt  # Verified: The deleted file was recovered!
+   ```
+
+---
+
+## Key Takeaways
+Through this lab, I successfully demonstrated how to manage raw block-level cloud storage, scale EC2 storage capacities, ensure persistence across reboots using `/etc/fstab`, and execute snapshot restorations to safeguard against data loss.
+
